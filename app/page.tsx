@@ -23,6 +23,18 @@ export default async function Home() {
 
     return (
         <div className="flex min-h-screen flex-col items-center p-8 bg-black text-white">
+
+            {/* --- NEW HEADER SECTION --- */}
+            <div className="w-full max-w-md flex justify-end mb-4">
+                <a
+                    href="/login"
+                    className="bg-blue-600 px-4 py-2 rounded text-sm font-bold hover:bg-blue-500 transition"
+                >
+                    Go to Login / VIP Area &rarr;
+                </a>
+            </div>
+            {/* -------------------------- */}
+
             <h1 className="text-3xl font-bold mb-8">Captions List</h1>
 
             <ul className="w-full max-w-md space-y-4">
