@@ -1,30 +1,99 @@
 import { createClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 
 export default async function ProtectedPage() {
-    // 1. Check if user is logged in
     const supabase = await createClient();
+
+    // 1. Verify the user is logged in
     const { data: { user } } = await supabase.auth.getUser();
 
-    // 2. If no user, kick them out (Server-side protection)
     if (!user) {
         return redirect("/login");
     }
 
-    // 3. Render the secret content
+    // 2. Fetch the captions to display them
+    const { data: captions } = await supabase.from("captions").select("*");
+
+    // 3. The "Mutator" Function (Server Action)
+    async function castVote(formData: FormData) {
+        "use server";
+
+        const captionId = formData.get("captionId") as string;
+        const voteType = formData.get("voteType") as string;
+
+        // Re-verify the user securely
+        const actionSupabase = await createClient();
+        const { data: { user: actionUser } } = await actionSupabase.auth.getUser();
+
+        if (!actionUser) {
+            console.error("Must be logged in to vote!");
+            return;
+        }
+
+        // Capture the exact current time in the standard format Supabase expects
+        const now = new Date().toISOString();
+
+        // INSERT THE ROW INTO SUPABASE
+        // Now we include the two required datetime columns
+        const { error } = await actionSupabase.from("caption_votes").insert({
+            caption_id: captionId,
+            profile_id: actionUser.id,
+            vote_value: voteType === "up" ? 1 : -1,
+            created_datetime_utc: now,
+            modified_datetime_utc: now
+        });
+
+        if (error) {
+            console.error("Database Insert Error:", error.message);
+        } else {
+            console.log("Vote successfully cast!");
+        }
+
+        // Refresh the page data
+        revalidatePath("/protected");
+    }
+
     return (
-        <div className="flex min-h-screen flex-col items-center justify-center bg-green-900 text-white">
-            <h1 className="text-4xl font-bold mb-4">VIP Area 🔓</h1>
-            <p className="text-xl mb-8">Welcome, {user.email}!</p>
+        <div className="flex min-h-screen flex-col items-center p-8 bg-black text-white">
+            <h1 className="text-3xl font-bold mb-4 text-green-400">VIP Voting Area 🗳️</h1>
+            <p className="mb-8 text-gray-400">Welcome, {user.email}! Cast your votes below.</p>
 
-            <div className="bg-black/30 p-6 rounded-lg max-w-lg">
-                <p>You have successfully authenticated with Google.</p>
-                <p className="mt-4 text-sm text-gray-300">User ID: {user.id}</p>
-            </div>
+            <ul className="w-full max-w-md space-y-4">
+                {captions?.map((caption) => (
+                    <li key={caption.id} className="p-4 border border-gray-700 rounded-lg bg-gray-900 flex justify-between items-center gap-4">
+                        <span className="text-sm">{caption.content}</span>
 
-            {/* Logout Button (Server Action would be better, but this works for now) */}
-            <form action="/auth/signout" method="post" className="mt-8">
-                <button className="bg-red-600 px-4 py-2 rounded hover:bg-red-700">
+                        <form action={castVote} className="flex gap-2 shrink-0">
+                            <input type="hidden" name="captionId" value={caption.id} />
+
+                            <button
+                                type="submit"
+                                name="voteType"
+                                value="up"
+                                className="bg-gray-700 hover:bg-green-600 px-3 py-1 rounded text-sm transition-colors"
+                            >
+                                👍
+                            </button>
+                            <button
+                                type="submit"
+                                name="voteType"
+                                value="down"
+                                className="bg-gray-700 hover:bg-red-600 px-3 py-1 rounded text-sm transition-colors"
+                            >
+                                👎
+                            </button>
+                        </form>
+                    </li>
+                ))}
+
+                {(!captions || captions.length === 0) && (
+                    <p className="text-gray-400">No captions available to vote on right now.</p>
+                )}
+            </ul>
+
+            <form action="/auth/signout" method="post" className="mt-12">
+                <button className="bg-red-600 px-4 py-2 rounded hover:bg-red-700 text-sm font-bold">
                     Sign Out
                 </button>
             </form>
