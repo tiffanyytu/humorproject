@@ -57,6 +57,11 @@ export default async function ProtectedPage() {
     return (
         <div className="flex min-h-screen flex-col items-center p-8 bg-black text-white">
             <h1 className="text-3xl font-bold mb-4 text-green-400">VIP Voting Area 🗳️</h1>
+            <div className="mb-6">
+                <a href="/protected/upload" className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded text-sm font-bold transition-colors shadow-lg">
+                    + Upload New Image
+                </a>
+            </div>
             <p className="mb-8 text-gray-400">Welcome, {user.email}! Cast your votes below.</p>
 
             <ul className="w-full max-w-md space-y-4">
