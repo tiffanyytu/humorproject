@@ -12,8 +12,14 @@ export default async function ProtectedPage() {
         return redirect("/login");
     }
 
-    // 2. Fetch the captions to display them
-    const { data: captions } = await supabase.from("captions").select("*");
+    // 2. Fetch the captions AND the associated image URL using a Supabase join
+    const { data: captions, error: fetchError } = await supabase
+        .from("captions")
+        .select("*, images(url)");
+
+    if (fetchError) {
+        console.error("Error fetching captions:", fetchError);
+    }
 
     // 3. The "Mutator" Function (Server Action)
     async function castVote(formData: FormData) {
@@ -35,7 +41,6 @@ export default async function ProtectedPage() {
         const now = new Date().toISOString();
 
         // INSERT THE ROW INTO SUPABASE
-        // Now we include the two required datetime columns
         const { error } = await actionSupabase.from("caption_votes").insert({
             caption_id: captionId,
             profile_id: actionUser.id,
@@ -64,31 +69,48 @@ export default async function ProtectedPage() {
             </div>
             <p className="mb-8 text-gray-400">Welcome, {user.email}! Cast your votes below.</p>
 
-            <ul className="w-full max-w-md space-y-4">
+            <ul className="w-full max-w-md space-y-6">
                 {captions?.map((caption) => (
-                    <li key={caption.id} className="p-4 border border-gray-700 rounded-lg bg-gray-900 flex justify-between items-center gap-4">
-                        <span className="text-sm">{caption.content}</span>
+                    <li key={caption.id} className="p-4 border border-gray-700 rounded-lg bg-gray-900 flex flex-col gap-4">
 
-                        <form action={castVote} className="flex gap-2 shrink-0">
-                            <input type="hidden" name="captionId" value={caption.id} />
+                        {/* THE NEW IMAGE SECTION */}
+                        {/* We use optional chaining (?.) just in case the RLS policy hides the image or it was deleted */}
+                        {caption.images?.url ? (
+                            <img
+                                src={caption.images.url}
+                                alt="Context for caption"
+                                className="w-full max-h-64 object-contain rounded bg-black/50"
+                            />
+                        ) : (
+                            <div className="w-full h-32 flex items-center justify-center bg-gray-800 rounded text-gray-500 text-sm">
+                                Image unavailable
+                            </div>
+                        )}
 
-                            <button
-                                type="submit"
-                                name="voteType"
-                                value="up"
-                                className="bg-gray-700 hover:bg-green-600 px-3 py-1 rounded text-sm transition-colors"
-                            >
-                                👍
-                            </button>
-                            <button
-                                type="submit"
-                                name="voteType"
-                                value="down"
-                                className="bg-gray-700 hover:bg-red-600 px-3 py-1 rounded text-sm transition-colors"
-                            >
-                                👎
-                            </button>
-                        </form>
+                        <div className="flex justify-between items-center gap-4">
+                            <span className="text-sm font-medium">{caption.content}</span>
+
+                            <form action={castVote} className="flex gap-2 shrink-0">
+                                <input type="hidden" name="captionId" value={caption.id} />
+
+                                <button
+                                    type="submit"
+                                    name="voteType"
+                                    value="up"
+                                    className="bg-gray-700 hover:bg-green-600 px-3 py-1 rounded text-sm transition-colors"
+                                >
+                                    👍
+                                </button>
+                                <button
+                                    type="submit"
+                                    name="voteType"
+                                    value="down"
+                                    className="bg-gray-700 hover:bg-red-600 px-3 py-1 rounded text-sm transition-colors"
+                                >
+                                    👎
+                                </button>
+                            </form>
+                        </div>
                     </li>
                 ))}
 
@@ -96,12 +118,6 @@ export default async function ProtectedPage() {
                     <p className="text-gray-400">No captions available to vote on right now.</p>
                 )}
             </ul>
-
-            <form action="/auth/signout" method="post" className="mt-12">
-                <button className="bg-red-600 px-4 py-2 rounded hover:bg-red-700 text-sm font-bold">
-                    Sign Out
-                </button>
-            </form>
         </div>
     );
 }

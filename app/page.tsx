@@ -1,14 +1,16 @@
 import { supabase } from "@/lib/supabaseClient";
 
-// 1. Define what a "Caption" looks like
+// 1. Define what a "Caption" looks like, now including the joined image data
 type Caption = {
     id: string;
     content: string;
+    images?: { url: string } | null;
 };
 
 // 2. Fetch data from Supabase
 async function getCaptions() {
-    const { data, error } = await supabase.from("captions").select("*");
+    // We update the select statement to pull the image URL via the foreign key
+    const { data, error } = await supabase.from("captions").select("*, images(url)");
 
     if (error) {
         console.error("Error fetching captions:", error);
@@ -35,15 +37,28 @@ export default async function Home() {
             </div>
             {/* -------------------------- */}
 
-            <h1 className="text-3xl font-bold mb-8">Captions List</h1>
+            <h1 className="text-3xl font-bold mb-8">Community Feed</h1>
 
-            <ul className="w-full max-w-md space-y-4">
+            <ul className="w-full max-w-md space-y-6">
                 {captions.map((caption) => (
                     <li
                         key={caption.id}
-                        className="p-4 border border-gray-700 rounded-lg bg-gray-900"
+                        className="p-4 border border-gray-700 rounded-lg bg-gray-900 flex flex-col gap-4"
                     >
-                        {caption.content}
+                        {/* THE NEW IMAGE SECTION */}
+                        {caption.images?.url ? (
+                            <img
+                                src={caption.images.url}
+                                alt="Context for caption"
+                                className="w-full max-h-64 object-contain rounded bg-black/50"
+                            />
+                        ) : (
+                            <div className="w-full h-32 flex items-center justify-center bg-gray-800 rounded text-gray-500 text-sm">
+                                Image unavailable
+                            </div>
+                        )}
+
+                        <span className="text-sm font-medium">{caption.content}</span>
                     </li>
                 ))}
 
