@@ -42,11 +42,12 @@ export default async function ProtectedPage() {
 
         // INSERT THE ROW INTO SUPABASE
         const { error } = await actionSupabase.from("caption_votes").insert({
-            caption_id: captionId,
-            profile_id: actionUser.id,
-            vote_value: voteType === "up" ? 1 : -1,
-            created_datetime_utc: now,
-            modified_datetime_utc: now
+                    caption_id: captionId,
+                    profile_id: actionUser.id,
+                    vote_value: voteType === "up" ? 1 : -1,
+                    // NEW REQUIRED FIELDS:
+                    created_by_user_id: actionUser.id,
+                    modified_by_user_id: actionUser.id
         });
 
         if (error) {

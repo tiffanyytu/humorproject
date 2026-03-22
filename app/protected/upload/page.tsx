@@ -17,73 +17,85 @@ export default function UploadPage() {
     };
 
     const runPipeline = async () => {
-        if (!file) return;
-        setIsLoading(true);
-        setCaptions([]);
+            if (!file) return;
+            setIsLoading(true);
+            setCaptions([]);
 
-        try {
-            // Get the logged-in user's JWT token required by the API
-            setStatus("Authenticating...");
-            const { data: { session } } = await supabase.auth.getSession();
-            const token = session?.access_token;
+            try {
+                // Get the logged-in user's JWT token AND their User ID
+                setStatus("Authenticating...");
+                const { data: { session } } = await supabase.auth.getSession();
+                const token = session?.access_token;
+                const userId = session?.user.id; // <-- Extract the User ID here!
 
-            if (!token) {
-                throw new Error("You must be logged in to do this.");
+                if (!token || !userId) {
+                    throw new Error("You must be logged in to do this.");
+                }
+
+                const headers = {
+                    "Authorization": `Bearer ${token}`,
+                    "Content-Type": "application/json"
+                };
+
+                // --- STEP 1: Generate Presigned URL ---
+                setStatus("Step 1: Generating AWS Presigned URL...");
+                const res1 = await fetch("https://api.almostcrackd.ai/pipeline/generate-presigned-url", {
+                    method: "POST",
+                    headers: headers,
+                    body: JSON.stringify({ contentType: file.type })
+                });
+                if (!res1.ok) throw new Error("Failed to generate presigned URL");
+                const { presignedUrl, cdnUrl } = await res1.json();
+
+                // --- STEP 2: Upload Image Bytes directly to AWS S3 ---
+                setStatus("Step 2: Uploading image to cloud storage...");
+                const res2 = await fetch(presignedUrl, {
+                    method: "PUT",
+                    headers: { "Content-Type": file.type },
+                    body: file
+                });
+                if (!res2.ok) throw new Error("Failed to upload image to S3");
+
+                // --- STEP 3: Register Image in the Pipeline ---
+                setStatus("Step 3: Registering image in the database...");
+                const res3 = await fetch("https://api.almostcrackd.ai/pipeline/upload-image-from-url", {
+                    method: "POST",
+                    headers: headers,
+                    body: JSON.stringify({
+                        imageUrl: cdnUrl,
+                        isCommonUse: false,
+                        // Pass the required fields to the API so the DB doesn't crash!
+                        created_by_user_id: userId,
+                        modified_by_user_id: userId
+                    })
+                });
+                if (!res3.ok) throw new Error("Failed to register image");
+                const { imageId } = await res3.json();
+
+                // --- STEP 4: Generate Captions ---
+                setStatus("Step 4: AI is generating funny captions...");
+                const res4 = await fetch("https://api.almostcrackd.ai/pipeline/generate-captions", {
+                    method: "POST",
+                    headers: headers,
+                    body: JSON.stringify({
+                        imageId: imageId,
+                        // Pass the required fields here too!
+                        created_by_user_id: userId,
+                        modified_by_user_id: userId
+                    })
+                });
+                if (!res4.ok) throw new Error("Failed to generate captions");
+
+                const generatedCaptions = await res4.json();
+                setCaptions(generatedCaptions);
+                setStatus("Success! Pipeline complete.");
+
+            } catch (error: any) {
+                console.error(error);
+                setStatus(`Error: ${error.message}`);
+            } finally {
+                setIsLoading(false);
             }
-
-            const headers = {
-                "Authorization": `Bearer ${token}`,
-                "Content-Type": "application/json"
-            };
-
-            // --- STEP 1: Generate Presigned URL ---
-            setStatus("Step 1: Generating AWS Presigned URL...");
-            const res1 = await fetch("https://api.almostcrackd.ai/pipeline/generate-presigned-url", {
-                method: "POST",
-                headers: headers,
-                body: JSON.stringify({ contentType: file.type })
-            });
-            if (!res1.ok) throw new Error("Failed to generate presigned URL");
-            const { presignedUrl, cdnUrl } = await res1.json();
-
-            // --- STEP 2: Upload Image Bytes directly to AWS S3 ---
-            setStatus("Step 2: Uploading image to cloud storage...");
-            const res2 = await fetch(presignedUrl, {
-                method: "PUT",
-                headers: { "Content-Type": file.type },
-                body: file
-            });
-            if (!res2.ok) throw new Error("Failed to upload image to S3");
-
-            // --- STEP 3: Register Image in the Pipeline ---
-            setStatus("Step 3: Registering image in the database...");
-            const res3 = await fetch("https://api.almostcrackd.ai/pipeline/upload-image-from-url", {
-                method: "POST",
-                headers: headers,
-                body: JSON.stringify({ imageUrl: cdnUrl, isCommonUse: false })
-            });
-            if (!res3.ok) throw new Error("Failed to register image");
-            const { imageId } = await res3.json();
-
-            // --- STEP 4: Generate Captions ---
-            setStatus("Step 4: AI is generating funny captions...");
-            const res4 = await fetch("https://api.almostcrackd.ai/pipeline/generate-captions", {
-                method: "POST",
-                headers: headers,
-                body: JSON.stringify({ imageId: imageId })
-            });
-            if (!res4.ok) throw new Error("Failed to generate captions");
-
-            const generatedCaptions = await res4.json();
-            setCaptions(generatedCaptions);
-            setStatus("Success! Pipeline complete.");
-
-        } catch (error: any) {
-            console.error(error);
-            setStatus(`Error: ${error.message}`);
-        } finally {
-            setIsLoading(false);
-        }
     };
 
     return (
